@@ -36,9 +36,11 @@ int main() {
 	}
 
 	// При конструировании array_view происходит копирование данных
-	concurrency::array_view<int, 1> a(pA); // Первый складываемый вектор в памяти устройства
-	concurrency::array_view<int, 1> b(pB); // Второй складываемый вектор в памяти устройства
+	// При вызове деструкторов array_view не происходит копирование памяти с устройтсва на хост из-за const (это и не нужно)
+	concurrency::array_view<const int, 1> a(pA); // Первый складываемый вектор в памяти устройства
+	concurrency::array_view<const int, 1> b(pB); // Второй складываемый вектор в памяти устройства
 	concurrency::array_view<int, 1> c(pC); // Результат сложения векторов в памяти устройства
+	c.discard_data(); // Благодаря этому не происходит лишнее копирование pC в память устройтва
 
 	// Запуск параллельной функции для каждого потока из c.extent, помеченого индексом idx
 	concurrency::parallel_for_each(c.extent, [=](concurrency::index<1> idx) restrict(amp) {
