@@ -90,11 +90,24 @@ int main() {
 	matRes_dev.discard_data(); // Благодаря этому не происходит лишнее копирование matRes в память устройтва
 
 	// Запуск параллельно выполняющейся анонимной функции, заданной лямбда-выражением,
-	// на эктенте, представляющим двухмерное множество потоков
-	concurrency::parallel_for_each(matRes_dev.extent, [=] (concurrency::index<2> ind) restrict(amp) {
+	// на эктенте, представляющим двухмерное множество потоков, разделенное на блоки 2х2.
+	// tiled_index<2, 2> специальный класс, инкапсулирующий индекс потока в прострастве потоков, разделенного на тайлы
+	concurrency::parallel_for_each(matRes_dev.extent.tile<2, 2>(), [=](concurrency::tiled_index<2, 2> ind) restrict(amp) {
 
-		// Можно использовать matRes_dev[ind], matA_dev[ind] и matB_dev[ind], но так нагляднее
-		matRes_dev(ind[0], ind[1]) = matA_dev(ind[0], ind[1]) + matB_dev(ind[0], ind[1]);
+		// Выделение разделяемой памяти
+		tile_static int tempA[2][2];
+		tile_static int tempB[2][2];
+
+		// Заполнение разделяемой памяти по локальным индексам потока в блоке
+		tempA[ind.local[0]][ind.local[1]] = matA_dev(ind.global[0], ind.global[1]);
+		tempB[ind.local[0]][ind.local[1]] = matB_dev(ind.global[0], ind.global[1]);
+
+		// Вычисление результирующего элемента матрицы по данным из разделяемой памяти.
+		// Использование разделяемой памяти имееет демонстрационный характер.
+		// Оно не даст прироста производительности в данной задаче, т.к. данные и
+		// так будут браться из глобальной памяти с объединением в транзакции
+		matRes_dev(ind.global[0], ind.global[1]) =
+			tempA[ind.local[0]][ind.local[1]] + tempB[ind.local[0]][ind.local[1]];
 	});
 
 	// Копирование данных из памяти устройства в память хоста
